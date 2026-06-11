@@ -64,6 +64,30 @@ export function isLandingPosition(board: BoardGrid, piece: ActivePiece): boolean
   });
 }
 
+export function getLandingPiece(board: BoardGrid, piece: ActivePiece): ActivePiece {
+  let landingPiece = piece;
+
+  while (
+    !hasCollision(board, {
+      ...landingPiece,
+      position: {
+        row: landingPiece.position.row + 1,
+        column: landingPiece.position.column,
+      },
+    })
+  ) {
+    landingPiece = {
+      ...landingPiece,
+      position: {
+        row: landingPiece.position.row + 1,
+        column: landingPiece.position.column,
+      },
+    };
+  }
+
+  return landingPiece;
+}
+
 export function lockPiece(board: BoardGrid, piece: ActivePiece): LockPieceResult {
   let nextBoard = board;
   let overflowed = false;
