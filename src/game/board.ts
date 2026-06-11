@@ -5,16 +5,35 @@ import {
   type ActivePiece,
   type BoardCell,
   type BoardGrid,
+  type BoardRow,
   type GameState,
   type GridPosition,
   type RotationIndex,
+  type ScoreState,
   type TetrominoId,
+  STARTING_LEVEL,
 } from './types';
 
+export interface ClearFullRowsResult {
+  board: BoardGrid;
+  clearedRows: number;
+  clearedRowIndexes: readonly number[];
+}
+
+export function createEmptyRow(): BoardRow {
+  return Array.from<BoardCell>({ length: BOARD_WIDTH }).fill(null);
+}
+
 export function createEmptyBoard(): BoardGrid {
-  return Array.from({ length: BOARD_HEIGHT }, () =>
-    Array.from<BoardCell>({ length: BOARD_WIDTH }).fill(null),
-  );
+  return Array.from({ length: BOARD_HEIGHT }, () => createEmptyRow());
+}
+
+export function createInitialScoreState(): ScoreState {
+  return {
+    score: 0,
+    level: STARTING_LEVEL,
+    lines: 0,
+  };
 }
 
 export function isInsideBoard({ row, column }: GridPosition): boolean {
@@ -45,6 +64,41 @@ export function setBoardCell(board: BoardGrid, position: GridPosition, cell: Boa
   );
 }
 
+export function isFullRow(row: BoardRow): boolean {
+  return row.every((cell) => cell !== null);
+}
+
+export function getFullRowIndexes(board: BoardGrid): readonly number[] {
+  return board.reduce<number[]>((indexes, row, rowIndex) => {
+    if (isFullRow(row)) {
+      indexes.push(rowIndex);
+    }
+
+    return indexes;
+  }, []);
+}
+
+export function clearFullRows(board: BoardGrid): ClearFullRowsResult {
+  const clearedRowIndexes = getFullRowIndexes(board);
+
+  if (clearedRowIndexes.length === 0) {
+    return {
+      board,
+      clearedRows: 0,
+      clearedRowIndexes,
+    };
+  }
+
+  const remainingRows = board.filter((row) => !isFullRow(row));
+  const emptyRows = Array.from({ length: clearedRowIndexes.length }, () => createEmptyRow());
+
+  return {
+    board: [...emptyRows, ...remainingRows],
+    clearedRows: clearedRowIndexes.length,
+    clearedRowIndexes,
+  };
+}
+
 export function createActivePiece(id: TetrominoId, rotationIndex: RotationIndex = 0): ActivePiece {
   const definition = getTetrominoDefinition(id);
 
@@ -63,5 +117,6 @@ export function createGameState(
     board: createEmptyBoard(),
     activePiece: activePieceId === null ? null : createActivePiece(activePieceId),
     nextPieceId,
+    score: createInitialScoreState(),
   };
 }

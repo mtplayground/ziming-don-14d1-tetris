@@ -1,6 +1,7 @@
 export const TETROMINO_IDS = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'] as const;
 export const BOARD_WIDTH = 10;
 export const BOARD_HEIGHT = 20;
+export const STARTING_LEVEL = 1;
 
 export type TetrominoId = (typeof TETROMINO_IDS)[number];
 export type MatrixCell = 0 | 1;
@@ -31,8 +32,15 @@ export interface ActivePiece {
   rotationIndex: RotationIndex;
 }
 
+export interface ScoreState {
+  score: number;
+  level: number;
+  lines: number;
+}
+
 export interface GameState {
   board: BoardGrid;
   activePiece: ActivePiece | null;
   nextPieceId: TetrominoId | null;
+  score: ScoreState;
 }

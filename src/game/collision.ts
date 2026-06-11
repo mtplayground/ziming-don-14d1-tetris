@@ -117,6 +117,7 @@ export function lockActivePieceAndSpawnNext(
       board: lockedPiece.board,
       activePiece: gameOver ? null : spawnedPiece,
       nextPieceId: followingPieceId,
+      score: state.score,
     },
     locked: true,
     gameOver,
