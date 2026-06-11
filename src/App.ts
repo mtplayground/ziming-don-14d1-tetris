@@ -1,3 +1,6 @@
+import { createGameState } from './game/board';
+import { createBoardCanvas, createBoardRenderer } from './render/canvas';
+
 interface AppOptions {
   title: string;
 }
@@ -29,9 +32,13 @@ export function createApp({ title }: AppOptions): HTMLElement {
     'aspect-[10/20] w-full max-w-[28rem] overflow-hidden rounded-lg border border-cyan-300/30 bg-neutral-950 shadow-2xl shadow-cyan-950/50 ring-1 ring-white/10';
   boardMount.setAttribute('aria-label', 'Game stage');
 
-  const boardSurface = document.createElement('div');
-  boardSurface.className = 'h-full w-full bg-game-grid';
-  boardMount.append(boardSurface);
+  const boardCanvas = createBoardCanvas();
+  boardCanvas.className = 'block h-full w-full';
+  boardCanvas.setAttribute('aria-label', 'Board grid');
+
+  const boardRenderer = createBoardRenderer(boardCanvas);
+  boardRenderer.render(createGameState().board);
+  boardMount.append(boardCanvas);
 
   const sidePanel = document.createElement('aside');
   sidePanel.className =
