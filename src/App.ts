@@ -1,10 +1,15 @@
-export function createApp(): HTMLElement {
+interface AppOptions {
+  title: string;
+}
+
+export function createApp({ title }: AppOptions): HTMLElement {
   const shell = document.createElement('main');
   shell.className =
     'min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_32rem),linear-gradient(135deg,#171717_0%,#111827_48%,#2b1635_100%)] px-4 py-6 text-stone-100 sm:px-6 lg:px-8';
 
   const layout = document.createElement('div');
-  layout.className = 'mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-6xl content-center gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center';
+  layout.className =
+    'mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-6xl content-center gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center';
 
   const playSection = document.createElement('section');
   playSection.className = 'grid gap-5';
@@ -13,7 +18,7 @@ export function createApp(): HTMLElement {
   const heading = document.createElement('h1');
   heading.id = 'game-title';
   heading.className = 'text-balance text-4xl font-black tracking-normal text-white sm:text-5xl';
-  heading.textContent = 'ziming-don-14d1-tetris';
+  heading.textContent = title;
 
   const intro = document.createElement('p');
   intro.className = 'max-w-2xl text-base leading-7 text-stone-300';
@@ -29,7 +34,8 @@ export function createApp(): HTMLElement {
   boardMount.append(boardSurface);
 
   const sidePanel = document.createElement('aside');
-  sidePanel.className = 'grid gap-4 rounded-lg border border-white/10 bg-neutral-950/70 p-4 shadow-xl shadow-black/30 backdrop-blur';
+  sidePanel.className =
+    'grid gap-4 rounded-lg border border-white/10 bg-neutral-950/70 p-4 shadow-xl shadow-black/30 backdrop-blur';
   sidePanel.setAttribute('aria-label', 'Game information');
 
   for (const label of ['Next', 'Score', 'Level']) {
