@@ -34,4 +34,5 @@ export interface ActivePiece {
 export interface GameState {
   board: BoardGrid;
   activePiece: ActivePiece | null;
+  nextPieceId: TetrominoId | null;
 }

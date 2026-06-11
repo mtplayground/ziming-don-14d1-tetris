@@ -55,9 +55,13 @@ export function createActivePiece(id: TetrominoId, rotationIndex: RotationIndex 
   };
 }
 
-export function createGameState(activePieceId: TetrominoId | null = null): GameState {
+export function createGameState(
+  activePieceId: TetrominoId | null = null,
+  nextPieceId: TetrominoId | null = null,
+): GameState {
   return {
     board: createEmptyBoard(),
     activePiece: activePieceId === null ? null : createActivePiece(activePieceId),
+    nextPieceId,
   };
 }
