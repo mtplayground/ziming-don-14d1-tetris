@@ -1,0 +1,46 @@
+# Architecture Plan
+
+## Product Context
+
+Repository: `ziming-don-14d1-tetris`
+
+No `PRODUCT.md` is present in the initial checkout. Use the repository name and issue text as the source of truth until product documentation is added.
+
+## Planned Module Structure
+
+- `index.html`: Vite browser entry.
+- `src/main.ts`: Application bootstrap.
+- `src/App.ts`: Top-level composition for layout, renderer, controls, HUD, and overlays.
+- `src/styles.css`: Tailwind entry plus base global styling.
+- `src/game/types.ts`: Shared engine types such as board dimensions, cells, tetromino ids, positions, active piece state, score state, game status, and game action names.
+- `src/game/tetrominoes.ts`: Seven tetromino definitions, rotation matrices, colors, and spawn metadata.
+- `src/game/board.ts`: Board creation, immutable grid updates, cell reads/writes, row detection, and row clearing.
+- `src/game/collision.ts`: Wall, floor, stack collision checks and ghost landing helpers.
+- `src/game/actions.ts`: Move, rotate with basic wall kicks, soft drop, hard drop, lock, spawn, and reducer-style state transitions.
+- `src/game/scoring.ts`: Line clear scoring, multi-line bonuses, level progression, and gravity interval calculation.
+- `src/game/loop.ts`: RequestAnimationFrame loop, elapsed-time accumulator, gravity ticks, pause handling, and cleanup hooks.
+- `src/render/canvas.ts`: Canvas sizing, high-DPI scaling, board grid rendering, locked-cell rendering, active piece rendering, ghost outline, and next-piece preview drawing.
+- `src/input/keyboard.ts`: Keyboard event binding for movement, rotation, hard drop, soft drop, and pause.
+- `src/ui/TouchControls.ts`: Mobile controls mapped to the same action API as keyboard input.
+- `src/ui/Hud.ts`: Score, level, and lines display.
+- `src/ui/Overlays.ts`: Start, pause, and game-over overlays.
+- `src/test/` or colocated `*.test.ts`: Unit tests for engine modules; Playwright specs for end-to-end playthrough.
+
+## Issue Dependency Flow
+
+1. Foundation: Issues #1-#3 establish Vite, TypeScript, Tailwind, linting, formatting, and environment examples.
+2. Core engine: Issues #4-#9 build tetromino data, board state, collision, locking, movement, scoring, levels, and gravity timing.
+3. Rendering: Issues #10-#12 add canvas rendering for the board, locked cells, active piece, ghost outline, and next-piece preview.
+4. Input and UI: Issues #13-#17 wire keyboard controls, touch controls, HUD, game state screens, pause, and game over.
+5. Verification and release: Issues #18-#20 add unit tests, end-to-end playthrough coverage, polish, and production build validation.
+
+## Key Design Decisions
+
+- Keep game rules in pure TypeScript modules under `src/game` so unit tests can cover behavior without DOM or canvas setup.
+- Treat UI input as commands dispatched into a single game action layer; keyboard and touch controls should not duplicate game logic.
+- Represent the board as a fixed 10x20 grid of nullable cell values, with active piece state kept separately until lock time.
+- Use deterministic state transitions where possible. Random next-piece generation should be isolated so tests can inject a known sequence.
+- Render from current state each frame rather than storing rendering state in the engine.
+- Use canvas for the board and preview because the rendering issues call for canvas setup, while ordinary DOM components handle HUD, controls, and overlays.
+- Keep level speed calculation in the scoring/timing layer so the game loop only consumes a gravity interval.
+- Add tests around engine behavior before relying on end-to-end coverage: collision, wall kicks, line clears, scoring, level changes, hard drop, lock/spawn, and game over.
