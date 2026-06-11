@@ -1,5 +1,12 @@
+import { getActivePieceCells, getLandingPiece } from '../game/collision';
 import { getTetrominoDefinition } from '../game/tetrominoes';
-import { BOARD_HEIGHT, BOARD_WIDTH, type BoardGrid } from '../game/types';
+import {
+  BOARD_HEIGHT,
+  BOARD_WIDTH,
+  type ActivePiece,
+  type BoardGrid,
+  type GameState,
+} from '../game/types';
 
 export const DEFAULT_CELL_SIZE = 32;
 
@@ -10,12 +17,16 @@ export interface BoardRenderOptions {
   gridColor?: string;
   cellInset?: number;
   lockedCellBorderColor?: string;
+  activeCellBorderColor?: string;
+  ghostAlpha?: number;
+  ghostLineColor?: string;
 }
 
 export interface BoardRenderer {
   canvas: HTMLCanvasElement;
   context: CanvasRenderingContext2D;
-  render: (board: BoardGrid) => void;
+  render: (state: GameState) => void;
+  renderBoard: (board: BoardGrid) => void;
   resize: (options?: BoardRenderOptions) => void;
 }
 
@@ -26,6 +37,9 @@ interface ResolvedBoardRenderOptions {
   gridColor: string;
   cellInset: number;
   lockedCellBorderColor: string;
+  activeCellBorderColor: string;
+  ghostAlpha: number;
+  ghostLineColor: string;
 }
 
 export function createBoardCanvas(options: BoardRenderOptions = {}): HTMLCanvasElement {
@@ -48,7 +62,8 @@ export function createBoardRenderer(
   return {
     canvas,
     context,
-    render: (board) => renderBoard(context, board, renderOptions),
+    render: (state) => renderGameState(context, state, renderOptions),
+    renderBoard: (board) => renderBoard(context, board, renderOptions),
     resize: (nextOptions = {}) => {
       renderOptions = resolveBoardRenderOptions({ ...renderOptions, ...nextOptions });
       resizeBoardCanvas(canvas, context, renderOptions);
@@ -65,11 +80,28 @@ export function renderBoard(
   const width = BOARD_WIDTH * renderOptions.cellSize;
   const height = BOARD_HEIGHT * renderOptions.cellSize;
 
-  context.clearRect(0, 0, width, height);
-  context.fillStyle = renderOptions.backgroundColor;
-  context.fillRect(0, 0, width, height);
-
+  renderBoardBackground(context, renderOptions, width, height);
   renderLockedCells(context, board, renderOptions);
+  renderBoardGrid(context, renderOptions);
+}
+
+export function renderGameState(
+  context: CanvasRenderingContext2D,
+  state: GameState,
+  options: BoardRenderOptions = {},
+): void {
+  const renderOptions = resolveBoardRenderOptions(options);
+  const width = BOARD_WIDTH * renderOptions.cellSize;
+  const height = BOARD_HEIGHT * renderOptions.cellSize;
+
+  renderBoardBackground(context, renderOptions, width, height);
+  renderLockedCells(context, state.board, renderOptions);
+
+  if (state.activePiece !== null) {
+    renderGhostPiece(context, state.board, state.activePiece, renderOptions);
+    renderActivePiece(context, state.activePiece, renderOptions);
+  }
+
   renderBoardGrid(context, renderOptions);
 }
 
@@ -116,13 +148,91 @@ function renderLockedCells(
       const y = rowIndex * options.cellSize + options.cellInset;
       const size = options.cellSize - options.cellInset * 2;
 
-      context.fillStyle = getTetrominoDefinition(cell).color;
-      context.fillRect(x, y, size, size);
-      context.strokeStyle = options.lockedCellBorderColor;
-      context.lineWidth = 1;
-      context.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+      fillCell(
+        context,
+        x,
+        y,
+        size,
+        getTetrominoDefinition(cell).color,
+        options.lockedCellBorderColor,
+      );
     });
   });
+}
+
+function renderActivePiece(
+  context: CanvasRenderingContext2D,
+  piece: ActivePiece,
+  options: ResolvedBoardRenderOptions,
+): void {
+  const color = getTetrominoDefinition(piece.id).color;
+
+  for (const position of getActivePieceCells(piece)) {
+    if (position.row < 0) {
+      continue;
+    }
+
+    const x = position.column * options.cellSize + options.cellInset;
+    const y = position.row * options.cellSize + options.cellInset;
+    const size = options.cellSize - options.cellInset * 2;
+
+    fillCell(context, x, y, size, color, options.activeCellBorderColor);
+  }
+}
+
+function renderGhostPiece(
+  context: CanvasRenderingContext2D,
+  board: BoardGrid,
+  piece: ActivePiece,
+  options: ResolvedBoardRenderOptions,
+): void {
+  const landingPiece = getLandingPiece(board, piece);
+
+  context.save();
+  context.globalAlpha = options.ghostAlpha;
+  context.strokeStyle = options.ghostLineColor;
+  context.lineWidth = 2;
+  context.setLineDash([options.cellSize * 0.28, options.cellSize * 0.16]);
+
+  for (const position of getActivePieceCells(landingPiece)) {
+    if (position.row < 0) {
+      continue;
+    }
+
+    const x = position.column * options.cellSize + options.cellInset + 0.5;
+    const y = position.row * options.cellSize + options.cellInset + 0.5;
+    const size = options.cellSize - options.cellInset * 2 - 1;
+
+    context.strokeRect(x, y, size, size);
+  }
+
+  context.restore();
+}
+
+function renderBoardBackground(
+  context: CanvasRenderingContext2D,
+  options: ResolvedBoardRenderOptions,
+  width: number,
+  height: number,
+): void {
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = options.backgroundColor;
+  context.fillRect(0, 0, width, height);
+}
+
+function fillCell(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  fillStyle: string,
+  strokeStyle: string,
+): void {
+  context.fillStyle = fillStyle;
+  context.fillRect(x, y, size, size);
+  context.strokeStyle = strokeStyle;
+  context.lineWidth = 1;
+  context.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
 }
 
 function renderBoardGrid(
@@ -159,5 +269,8 @@ function resolveBoardRenderOptions(options: BoardRenderOptions): ResolvedBoardRe
     gridColor: options.gridColor ?? 'rgba(148, 163, 184, 0.2)',
     cellInset: options.cellInset ?? 2,
     lockedCellBorderColor: options.lockedCellBorderColor ?? 'rgba(255, 255, 255, 0.32)',
+    activeCellBorderColor: options.activeCellBorderColor ?? 'rgba(255, 255, 255, 0.58)',
+    ghostAlpha: options.ghostAlpha ?? 0.55,
+    ghostLineColor: options.ghostLineColor ?? 'rgba(226, 232, 240, 0.9)',
   };
 }

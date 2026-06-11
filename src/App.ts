@@ -37,7 +37,7 @@ export function createApp({ title }: AppOptions): HTMLElement {
   boardCanvas.setAttribute('aria-label', 'Board grid');
 
   const boardRenderer = createBoardRenderer(boardCanvas);
-  boardRenderer.render(createGameState().board);
+  boardRenderer.render(createGameState('T', 'I'));
   boardMount.append(boardCanvas);
 
   const sidePanel = document.createElement('aside');
