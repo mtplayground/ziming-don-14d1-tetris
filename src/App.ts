@@ -8,6 +8,7 @@ import {
 } from './game/actions';
 import { advanceGravityTick } from './game/loop';
 import { bindKeyboardControls, type KeyboardAction } from './input/keyboard';
+import { createTouchControls } from './input/touch';
 import {
   createBoardCanvas,
   createBoardRenderer,
@@ -61,6 +62,20 @@ export function createApp({ title }: AppOptions): HTMLElement {
     previewRenderer?.render(gameState.nextPieceId);
   };
 
+  const handleGameAction = (action: KeyboardAction): void => {
+    if (action === 'pause-toggle') {
+      paused = !paused;
+      return;
+    }
+
+    if (paused) {
+      return;
+    }
+
+    gameState = applyKeyboardAction(gameState, action);
+    renderGame();
+  };
+
   boardMount.append(boardCanvas);
 
   const sidePanel = document.createElement('aside');
@@ -91,24 +106,16 @@ export function createApp({ title }: AppOptions): HTMLElement {
   }
 
   bindKeyboardControls({
-    onAction: (action) => {
-      if (action === 'pause-toggle') {
-        paused = !paused;
-        return;
-      }
+    onAction: handleGameAction,
+  });
 
-      if (paused) {
-        return;
-      }
-
-      gameState = applyKeyboardAction(gameState, action);
-      renderGame();
-    },
+  const touchControls = createTouchControls({
+    onAction: handleGameAction,
   });
 
   renderGame();
 
-  playSection.append(heading, intro, boardMount);
+  playSection.append(heading, intro, boardMount, touchControls);
   layout.append(playSection, sidePanel);
   shell.append(layout);
   return shell;
