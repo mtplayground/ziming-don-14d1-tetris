@@ -30,6 +30,7 @@
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
+    overscroll-behavior: none;
   }
 
   button,
