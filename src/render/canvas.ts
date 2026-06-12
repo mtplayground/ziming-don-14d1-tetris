@@ -6,9 +6,12 @@ import {
   type ActivePiece,
   type BoardGrid,
   type GameState,
+  type TetrominoId,
 } from '../game/types';
 
 export const DEFAULT_CELL_SIZE = 32;
+export const DEFAULT_PREVIEW_CELL_SIZE = 24;
+export const PREVIEW_GRID_SIZE = 4;
 
 export interface BoardRenderOptions {
   cellSize?: number;
@@ -22,12 +25,28 @@ export interface BoardRenderOptions {
   ghostLineColor?: string;
 }
 
+export interface NextPiecePreviewOptions {
+  cellSize?: number;
+  devicePixelRatio?: number;
+  backgroundColor?: string;
+  gridColor?: string;
+  cellInset?: number;
+  cellBorderColor?: string;
+}
+
 export interface BoardRenderer {
   canvas: HTMLCanvasElement;
   context: CanvasRenderingContext2D;
   render: (state: GameState) => void;
   renderBoard: (board: BoardGrid) => void;
   resize: (options?: BoardRenderOptions) => void;
+}
+
+export interface NextPiecePreviewRenderer {
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D;
+  render: (pieceId: TetrominoId | null) => void;
+  resize: (options?: NextPiecePreviewOptions) => void;
 }
 
 interface ResolvedBoardRenderOptions {
@@ -42,11 +61,30 @@ interface ResolvedBoardRenderOptions {
   ghostLineColor: string;
 }
 
+interface ResolvedNextPiecePreviewOptions {
+  cellSize: number;
+  devicePixelRatio: number;
+  backgroundColor: string;
+  gridColor: string;
+  cellInset: number;
+  cellBorderColor: string;
+}
+
 export function createBoardCanvas(options: BoardRenderOptions = {}): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   const context = getCanvasContext(canvas);
 
   resizeBoardCanvas(canvas, context, options);
+  return canvas;
+}
+
+export function createNextPiecePreviewCanvas(
+  options: NextPiecePreviewOptions = {},
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  const context = getCanvasContext(canvas);
+
+  resizeNextPiecePreviewCanvas(canvas, context, options);
   return canvas;
 }
 
@@ -67,6 +105,26 @@ export function createBoardRenderer(
     resize: (nextOptions = {}) => {
       renderOptions = resolveBoardRenderOptions({ ...renderOptions, ...nextOptions });
       resizeBoardCanvas(canvas, context, renderOptions);
+    },
+  };
+}
+
+export function createNextPiecePreviewRenderer(
+  canvas: HTMLCanvasElement,
+  options: NextPiecePreviewOptions = {},
+): NextPiecePreviewRenderer {
+  const context = getCanvasContext(canvas);
+  let renderOptions = resolveNextPiecePreviewOptions(options);
+
+  resizeNextPiecePreviewCanvas(canvas, context, renderOptions);
+
+  return {
+    canvas,
+    context,
+    render: (pieceId) => renderNextPiecePreview(context, pieceId, renderOptions),
+    resize: (nextOptions = {}) => {
+      renderOptions = resolveNextPiecePreviewOptions({ ...renderOptions, ...nextOptions });
+      resizeNextPiecePreviewCanvas(canvas, context, renderOptions);
     },
   };
 }
@@ -105,6 +163,26 @@ export function renderGameState(
   renderBoardGrid(context, renderOptions);
 }
 
+export function renderNextPiecePreview(
+  context: CanvasRenderingContext2D,
+  pieceId: TetrominoId | null,
+  options: NextPiecePreviewOptions = {},
+): void {
+  const renderOptions = resolveNextPiecePreviewOptions(options);
+  const size = PREVIEW_GRID_SIZE * renderOptions.cellSize;
+
+  context.clearRect(0, 0, size, size);
+  context.fillStyle = renderOptions.backgroundColor;
+  context.fillRect(0, 0, size, size);
+  renderPreviewGrid(context, renderOptions);
+
+  if (pieceId === null) {
+    return;
+  }
+
+  renderPreviewPiece(context, pieceId, renderOptions);
+}
+
 export function resizeBoardCanvas(
   canvas: HTMLCanvasElement,
   context: CanvasRenderingContext2D,
@@ -123,6 +201,23 @@ export function resizeBoardCanvas(
   context.imageSmoothingEnabled = false;
 }
 
+export function resizeNextPiecePreviewCanvas(
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+  options: NextPiecePreviewOptions = {},
+): void {
+  const renderOptions = resolveNextPiecePreviewOptions(options);
+  const size = PREVIEW_GRID_SIZE * renderOptions.cellSize;
+
+  canvas.width = Math.floor(size * renderOptions.devicePixelRatio);
+  canvas.height = Math.floor(size * renderOptions.devicePixelRatio);
+  canvas.style.width = '100%';
+  canvas.style.height = 'auto';
+
+  context.setTransform(renderOptions.devicePixelRatio, 0, 0, renderOptions.devicePixelRatio, 0, 0);
+  context.imageSmoothingEnabled = false;
+}
+
 function getCanvasContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
   const context = canvas.getContext('2d');
 
@@ -131,6 +226,92 @@ function getCanvasContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
   }
 
   return context;
+}
+
+function renderPreviewPiece(
+  context: CanvasRenderingContext2D,
+  pieceId: TetrominoId,
+  options: ResolvedNextPiecePreviewOptions,
+): void {
+  const definition = getTetrominoDefinition(pieceId);
+  const cells = getMatrixCells(definition.rotations[0]);
+
+  if (cells.length === 0) {
+    return;
+  }
+
+  const bounds = getCellBounds(cells);
+  const pieceWidth = bounds.maxColumn - bounds.minColumn + 1;
+  const pieceHeight = bounds.maxRow - bounds.minRow + 1;
+  const columnOffset = (PREVIEW_GRID_SIZE - pieceWidth) / 2 - bounds.minColumn;
+  const rowOffset = (PREVIEW_GRID_SIZE - pieceHeight) / 2 - bounds.minRow;
+
+  for (const cell of cells) {
+    const x = (cell.column + columnOffset) * options.cellSize + options.cellInset;
+    const y = (cell.row + rowOffset) * options.cellSize + options.cellInset;
+    const size = options.cellSize - options.cellInset * 2;
+
+    fillCell(context, x, y, size, definition.color, options.cellBorderColor);
+  }
+}
+
+function renderPreviewGrid(
+  context: CanvasRenderingContext2D,
+  options: ResolvedNextPiecePreviewOptions,
+): void {
+  const size = PREVIEW_GRID_SIZE * options.cellSize;
+
+  context.beginPath();
+  context.strokeStyle = options.gridColor;
+  context.lineWidth = 1;
+
+  for (let line = 0; line <= PREVIEW_GRID_SIZE; line += 1) {
+    const offset = line * options.cellSize + 0.5;
+    context.moveTo(offset, 0);
+    context.lineTo(offset, size);
+    context.moveTo(0, offset);
+    context.lineTo(size, offset);
+  }
+
+  context.stroke();
+}
+
+function getMatrixCells(
+  matrix: readonly (readonly number[])[],
+): readonly { row: number; column: number }[] {
+  const cells: { row: number; column: number }[] = [];
+
+  matrix.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      if (cell === 1) {
+        cells.push({ row: rowIndex, column: columnIndex });
+      }
+    });
+  });
+
+  return cells;
+}
+
+function getCellBounds(cells: readonly { row: number; column: number }[]): {
+  minRow: number;
+  maxRow: number;
+  minColumn: number;
+  maxColumn: number;
+} {
+  return cells.reduce(
+    (bounds, cell) => ({
+      minRow: Math.min(bounds.minRow, cell.row),
+      maxRow: Math.max(bounds.maxRow, cell.row),
+      minColumn: Math.min(bounds.minColumn, cell.column),
+      maxColumn: Math.max(bounds.maxColumn, cell.column),
+    }),
+    {
+      minRow: Number.POSITIVE_INFINITY,
+      maxRow: Number.NEGATIVE_INFINITY,
+      minColumn: Number.POSITIVE_INFINITY,
+      maxColumn: Number.NEGATIVE_INFINITY,
+    },
+  );
 }
 
 function renderLockedCells(
@@ -272,5 +453,18 @@ function resolveBoardRenderOptions(options: BoardRenderOptions): ResolvedBoardRe
     activeCellBorderColor: options.activeCellBorderColor ?? 'rgba(255, 255, 255, 0.58)',
     ghostAlpha: options.ghostAlpha ?? 0.55,
     ghostLineColor: options.ghostLineColor ?? 'rgba(226, 232, 240, 0.9)',
+  };
+}
+
+function resolveNextPiecePreviewOptions(
+  options: NextPiecePreviewOptions,
+): ResolvedNextPiecePreviewOptions {
+  return {
+    cellSize: options.cellSize ?? DEFAULT_PREVIEW_CELL_SIZE,
+    devicePixelRatio: Math.max(options.devicePixelRatio ?? globalThis.devicePixelRatio ?? 1, 1),
+    backgroundColor: options.backgroundColor ?? '#020617',
+    gridColor: options.gridColor ?? 'rgba(148, 163, 184, 0.14)',
+    cellInset: options.cellInset ?? 2,
+    cellBorderColor: options.cellBorderColor ?? 'rgba(255, 255, 255, 0.42)',
   };
 }
