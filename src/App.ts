@@ -41,6 +41,10 @@ interface PhaseOverlayElements {
   container: HTMLElement;
   title: HTMLElement;
   body: HTMLElement;
+  stats: HTMLElement;
+  scoreValue: HTMLElement;
+  levelValue: HTMLElement;
+  linesValue: HTMLElement;
   button: HTMLButtonElement;
 }
 
@@ -102,7 +106,7 @@ export function createApp({ title }: AppOptions): HTMLElement {
     boardRenderer.render(gameState);
     previewRenderer?.render(gameState.nextPieceId);
     renderHud(hudElements, gameState);
-    renderPhaseOverlay(phaseOverlay, phase);
+    renderPhaseOverlay(phaseOverlay, phase, gameState);
   }
 
   function handleGameAction(action: KeyboardAction): void {
@@ -250,6 +254,7 @@ function createPhaseOverlay(onPrimaryAction: () => void): PhaseOverlayElements {
   container.className =
     'absolute inset-0 grid place-items-center bg-neutral-950/80 p-6 text-center backdrop-blur-sm';
   container.setAttribute('aria-live', 'polite');
+  container.setAttribute('role', 'dialog');
 
   const panel = document.createElement('div');
   panel.className = 'grid max-w-72 gap-4';
@@ -260,20 +265,27 @@ function createPhaseOverlay(onPrimaryAction: () => void): PhaseOverlayElements {
   const body = document.createElement('p');
   body.className = 'text-sm leading-6 text-stone-300';
 
+  const { stats, scoreValue, levelValue, linesValue } = createGameOverStats();
+
   const button = document.createElement('button');
   button.type = 'button';
   button.className =
     'min-h-12 rounded-lg bg-cyan-300 px-5 py-3 text-base font-black text-neutral-950 shadow-lg shadow-cyan-950/40 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-100 focus:ring-offset-2 focus:ring-offset-neutral-950 active:translate-y-px';
   button.addEventListener('click', onPrimaryAction);
 
-  panel.append(title, body, button);
+  panel.append(title, body, stats, button);
   container.append(panel);
 
-  return { container, title, body, button };
+  return { container, title, body, stats, scoreValue, levelValue, linesValue, button };
 }
 
-function renderPhaseOverlay(elements: PhaseOverlayElements, phase: GamePhase): void {
+function renderPhaseOverlay(
+  elements: PhaseOverlayElements,
+  phase: GamePhase,
+  state: GameState,
+): void {
   elements.container.classList.toggle('hidden', phase === 'playing');
+  elements.stats.classList.toggle('hidden', phase !== 'game-over');
 
   if (phase === 'ready') {
     elements.title.textContent = 'Ready';
@@ -284,16 +296,57 @@ function renderPhaseOverlay(elements: PhaseOverlayElements, phase: GamePhase): v
 
   if (phase === 'paused') {
     elements.title.textContent = 'Paused';
-    elements.body.textContent = 'The current run is stopped.';
+    elements.body.textContent = 'Resume this run when you are ready.';
     elements.button.textContent = 'Resume';
     return;
   }
 
   if (phase === 'game-over') {
     elements.title.textContent = 'Game over';
-    elements.body.textContent = 'Start again with a clear board.';
+    elements.body.textContent = 'Final run summary.';
+    elements.scoreValue.textContent = NUMBER_FORMATTER.format(state.score.score);
+    elements.levelValue.textContent = NUMBER_FORMATTER.format(state.score.level);
+    elements.linesValue.textContent = NUMBER_FORMATTER.format(state.score.lines);
     elements.button.textContent = 'Restart';
   }
+}
+
+function createGameOverStats(): Pick<
+  PhaseOverlayElements,
+  'stats' | 'scoreValue' | 'levelValue' | 'linesValue'
+> {
+  const stats = document.createElement('dl');
+  stats.className = 'grid grid-cols-3 gap-2 rounded-md border border-white/10 bg-white/[0.06] p-3';
+
+  const score = createGameOverStat('Score');
+  const level = createGameOverStat('Level');
+  const lines = createGameOverStat('Lines');
+
+  stats.append(score.item, level.item, lines.item);
+
+  return {
+    stats,
+    scoreValue: score.value,
+    levelValue: level.value,
+    linesValue: lines.value,
+  };
+}
+
+function createGameOverStat(label: string): { item: HTMLElement; value: HTMLElement } {
+  const item = document.createElement('div');
+  item.className = 'grid gap-1';
+
+  const term = document.createElement('dt');
+  term.className = 'text-[0.65rem] font-semibold uppercase tracking-normal text-amber-200';
+  term.textContent = label;
+
+  const value = document.createElement('dd');
+  value.className = 'text-lg font-black tabular-nums leading-none text-white';
+  value.textContent = '0';
+
+  item.append(term, value);
+
+  return { item, value };
 }
 
 function createRandomPieceProvider(): NextPieceProvider {
