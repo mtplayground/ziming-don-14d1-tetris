@@ -168,6 +168,22 @@ export function createApp({ title }: AppOptions): HTMLElement {
     gameLoop.start();
   }
 
+  function resizeCanvases(): void {
+    const devicePixelRatio = getDevicePixelRatio();
+
+    boardRenderer.resize({ devicePixelRatio });
+    previewRenderer?.resize({ devicePixelRatio });
+    renderGame();
+  }
+
+  function pauseWhenHidden(): void {
+    if (document.hidden && phase === 'playing') {
+      phase = 'paused';
+      gameLoop.stop();
+      renderGame();
+    }
+  }
+
   boardMount.append(boardCanvas, phaseOverlay.container);
 
   const sidePanel = document.createElement('aside');
@@ -212,6 +228,9 @@ export function createApp({ title }: AppOptions): HTMLElement {
   bindKeyboardControls({
     onAction: handleGameAction,
   });
+
+  globalThis.addEventListener('resize', resizeCanvases);
+  document.addEventListener('visibilitychange', pauseWhenHidden);
 
   const touchControls = createTouchControls({
     onAction: handleGameAction,
@@ -351,6 +370,10 @@ function createGameOverStat(label: string): { item: HTMLElement; value: HTMLElem
 
 function createRandomPieceProvider(): NextPieceProvider {
   return () => TETROMINO_IDS[Math.floor(Math.random() * TETROMINO_IDS.length)] ?? TETROMINO_IDS[0];
+}
+
+function getDevicePixelRatio(): number {
+  return Math.max(globalThis.devicePixelRatio || 1, 1);
 }
 
 function createFreshGameState(nextPieceProvider: NextPieceProvider): GameState {
