@@ -1,9 +1,19 @@
 import { createGameState } from './game/board';
 import {
+  hardDropActivePiece,
+  moveActivePieceLeft,
+  moveActivePieceRight,
+  rotateActivePiece,
+  softDropActivePiece,
+} from './game/actions';
+import { advanceGravityTick } from './game/loop';
+import { bindKeyboardControls, type KeyboardAction } from './input/keyboard';
+import {
   createBoardCanvas,
   createBoardRenderer,
   createNextPiecePreviewCanvas,
   createNextPiecePreviewRenderer,
+  type NextPiecePreviewRenderer,
 } from './render/canvas';
 
 interface AppOptions {
@@ -41,9 +51,16 @@ export function createApp({ title }: AppOptions): HTMLElement {
   boardCanvas.className = 'block h-full w-full';
   boardCanvas.setAttribute('aria-label', 'Board grid');
 
-  const gameState = createGameState('T', 'I');
+  let gameState = createGameState('T', 'I');
+  let paused = false;
+  let previewRenderer: NextPiecePreviewRenderer | null = null;
   const boardRenderer = createBoardRenderer(boardCanvas);
-  boardRenderer.render(gameState);
+
+  const renderGame = (): void => {
+    boardRenderer.render(gameState);
+    previewRenderer?.render(gameState.nextPieceId);
+  };
+
   boardMount.append(boardCanvas);
 
   const sidePanel = document.createElement('aside');
@@ -66,16 +83,57 @@ export function createApp({ title }: AppOptions): HTMLElement {
       previewCanvas.className = 'mt-3 block w-full rounded border border-white/10';
       previewCanvas.setAttribute('aria-label', 'Next piece preview');
 
-      const previewRenderer = createNextPiecePreviewRenderer(previewCanvas);
-      previewRenderer.render(gameState.nextPieceId);
+      previewRenderer = createNextPiecePreviewRenderer(previewCanvas);
       panel.append(previewCanvas);
     }
 
     sidePanel.append(panel);
   }
 
+  bindKeyboardControls({
+    onAction: (action) => {
+      if (action === 'pause-toggle') {
+        paused = !paused;
+        return;
+      }
+
+      if (paused) {
+        return;
+      }
+
+      gameState = applyKeyboardAction(gameState, action);
+      renderGame();
+    },
+  });
+
+  renderGame();
+
   playSection.append(heading, intro, boardMount);
   layout.append(playSection, sidePanel);
   shell.append(layout);
   return shell;
+}
+
+function applyKeyboardAction(
+  state: ReturnType<typeof createGameState>,
+  action: Exclude<KeyboardAction, 'pause-toggle'>,
+): ReturnType<typeof createGameState> {
+  switch (action) {
+    case 'move-left':
+      return moveActivePieceLeft(state).state;
+    case 'move-right':
+      return moveActivePieceRight(state).state;
+    case 'rotate-clockwise':
+      return rotateActivePiece(state).state;
+    case 'soft-drop': {
+      const result = softDropActivePiece(state);
+
+      return result.landed && !result.moved ? advanceGravityTick(result.state).state : result.state;
+    }
+    case 'hard-drop': {
+      const result = hardDropActivePiece(state);
+
+      return result.landed ? advanceGravityTick(result.state).state : result.state;
+    }
+  }
 }
