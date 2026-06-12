@@ -1,5 +1,10 @@
 import { createGameState } from './game/board';
-import { createBoardCanvas, createBoardRenderer } from './render/canvas';
+import {
+  createBoardCanvas,
+  createBoardRenderer,
+  createNextPiecePreviewCanvas,
+  createNextPiecePreviewRenderer,
+} from './render/canvas';
 
 interface AppOptions {
   title: string;
@@ -36,8 +41,9 @@ export function createApp({ title }: AppOptions): HTMLElement {
   boardCanvas.className = 'block h-full w-full';
   boardCanvas.setAttribute('aria-label', 'Board grid');
 
+  const gameState = createGameState('T', 'I');
   const boardRenderer = createBoardRenderer(boardCanvas);
-  boardRenderer.render(createGameState('T', 'I'));
+  boardRenderer.render(gameState);
   boardMount.append(boardCanvas);
 
   const sidePanel = document.createElement('aside');
@@ -54,6 +60,17 @@ export function createApp({ title }: AppOptions): HTMLElement {
     title.textContent = label;
 
     panel.append(title);
+
+    if (label === 'Next') {
+      const previewCanvas = createNextPiecePreviewCanvas();
+      previewCanvas.className = 'mt-3 block w-full rounded border border-white/10';
+      previewCanvas.setAttribute('aria-label', 'Next piece preview');
+
+      const previewRenderer = createNextPiecePreviewRenderer(previewCanvas);
+      previewRenderer.render(gameState.nextPieceId);
+      panel.append(previewCanvas);
+    }
+
     sidePanel.append(panel);
   }
 
