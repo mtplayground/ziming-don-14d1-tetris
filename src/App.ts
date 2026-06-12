@@ -21,6 +21,14 @@ interface AppOptions {
   title: string;
 }
 
+interface HudElements {
+  score: HTMLElement;
+  level: HTMLElement;
+  lines: HTMLElement;
+}
+
+const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
+
 export function createApp({ title }: AppOptions): HTMLElement {
   const shell = document.createElement('main');
   shell.className =
@@ -55,11 +63,13 @@ export function createApp({ title }: AppOptions): HTMLElement {
   let gameState = createGameState('T', 'I');
   let paused = false;
   let previewRenderer: NextPiecePreviewRenderer | null = null;
+  const hudElements = createHudElements();
   const boardRenderer = createBoardRenderer(boardCanvas);
 
   const renderGame = (): void => {
     boardRenderer.render(gameState);
     previewRenderer?.render(gameState.nextPieceId);
+    renderHud(hudElements, gameState);
   };
 
   const handleGameAction = (action: KeyboardAction): void => {
@@ -83,7 +93,7 @@ export function createApp({ title }: AppOptions): HTMLElement {
     'grid gap-4 rounded-lg border border-white/10 bg-neutral-950/70 p-4 shadow-xl shadow-black/30 backdrop-blur';
   sidePanel.setAttribute('aria-label', 'Game information');
 
-  for (const label of ['Next', 'Score', 'Level']) {
+  for (const label of ['Next', 'Score', 'Level', 'Lines']) {
     const panel = document.createElement('section');
     panel.className = 'rounded-md border border-white/10 bg-white/[0.04] p-4';
 
@@ -100,6 +110,18 @@ export function createApp({ title }: AppOptions): HTMLElement {
 
       previewRenderer = createNextPiecePreviewRenderer(previewCanvas);
       panel.append(previewCanvas);
+    }
+
+    if (label === 'Score') {
+      panel.append(hudElements.score);
+    }
+
+    if (label === 'Level') {
+      panel.append(hudElements.level);
+    }
+
+    if (label === 'Lines') {
+      panel.append(hudElements.lines);
     }
 
     sidePanel.append(panel);
@@ -119,6 +141,30 @@ export function createApp({ title }: AppOptions): HTMLElement {
   layout.append(playSection, sidePanel);
   shell.append(layout);
   return shell;
+}
+
+function createHudElements(): HudElements {
+  return {
+    score: createHudValueElement('Current score'),
+    level: createHudValueElement('Current level'),
+    lines: createHudValueElement('Lines cleared'),
+  };
+}
+
+function createHudValueElement(label: string): HTMLElement {
+  const value = document.createElement('p');
+  value.className = 'mt-2 text-3xl font-black tabular-nums leading-none text-white sm:text-4xl';
+  value.setAttribute('aria-label', label);
+  value.setAttribute('aria-live', 'polite');
+  value.textContent = '0';
+
+  return value;
+}
+
+function renderHud(hudElements: HudElements, state: ReturnType<typeof createGameState>): void {
+  hudElements.score.textContent = NUMBER_FORMATTER.format(state.score.score);
+  hudElements.level.textContent = NUMBER_FORMATTER.format(state.score.level);
+  hudElements.lines.textContent = NUMBER_FORMATTER.format(state.score.lines);
 }
 
 function applyKeyboardAction(
