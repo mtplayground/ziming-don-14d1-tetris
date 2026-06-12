@@ -6,7 +6,9 @@ import {
   rotateActivePiece,
   softDropActivePiece,
 } from './game/actions';
-import { advanceGravityTick } from './game/loop';
+import { advanceGravityTick, createGameLoop } from './game/loop';
+import { TETROMINO_IDS } from './game/types';
+import type { GameState, TetrominoId } from './game/types';
 import { bindKeyboardControls, type KeyboardAction } from './input/keyboard';
 import { createTouchControls } from './input/touch';
 import {
@@ -25,6 +27,21 @@ interface HudElements {
   score: HTMLElement;
   level: HTMLElement;
   lines: HTMLElement;
+}
+
+type GamePhase = 'ready' | 'playing' | 'paused' | 'game-over';
+type NextPieceProvider = () => TetrominoId;
+
+interface GameActionResult {
+  state: GameState;
+  gameOver: boolean;
+}
+
+interface PhaseOverlayElements {
+  container: HTMLElement;
+  title: HTMLElement;
+  body: HTMLElement;
+  button: HTMLButtonElement;
 }
 
 const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
@@ -53,40 +70,101 @@ export function createApp({ title }: AppOptions): HTMLElement {
 
   const boardMount = document.createElement('section');
   boardMount.className =
-    'aspect-[10/20] w-full max-w-[28rem] overflow-hidden rounded-lg border border-cyan-300/30 bg-neutral-950 shadow-2xl shadow-cyan-950/50 ring-1 ring-white/10';
+    'relative aspect-[10/20] w-full max-w-[28rem] overflow-hidden rounded-lg border border-cyan-300/30 bg-neutral-950 shadow-2xl shadow-cyan-950/50 ring-1 ring-white/10';
   boardMount.setAttribute('aria-label', 'Game stage');
 
   const boardCanvas = createBoardCanvas();
   boardCanvas.className = 'block h-full w-full';
   boardCanvas.setAttribute('aria-label', 'Board grid');
 
-  let gameState = createGameState('T', 'I');
-  let paused = false;
+  const nextPieceProvider = createRandomPieceProvider();
+  let phase: GamePhase = 'ready';
+  let gameState = createGameState();
   let previewRenderer: NextPiecePreviewRenderer | null = null;
   const hudElements = createHudElements();
+  const phaseOverlay = createPhaseOverlay(handlePrimaryPhaseAction);
   const boardRenderer = createBoardRenderer(boardCanvas);
+  const gameLoop = createGameLoop({
+    initialState: gameState,
+    getNextPieceId: nextPieceProvider,
+    onTick: (result) => {
+      gameState = result.state;
 
-  const renderGame = (): void => {
+      if (result.gameOver) {
+        phase = 'game-over';
+      }
+
+      renderGame();
+    },
+  });
+
+  function renderGame(): void {
     boardRenderer.render(gameState);
     previewRenderer?.render(gameState.nextPieceId);
     renderHud(hudElements, gameState);
-  };
+    renderPhaseOverlay(phaseOverlay, phase);
+  }
 
-  const handleGameAction = (action: KeyboardAction): void => {
+  function handleGameAction(action: KeyboardAction): void {
     if (action === 'pause-toggle') {
-      paused = !paused;
+      togglePause();
       return;
     }
 
-    if (paused) {
+    if (phase !== 'playing') {
       return;
     }
 
-    gameState = applyKeyboardAction(gameState, action);
+    const result = applyKeyboardAction(gameState, action, nextPieceProvider);
+    gameState = result.state;
+    gameLoop.setState(gameState);
+
+    if (result.gameOver) {
+      phase = 'game-over';
+      gameLoop.stop();
+    }
+
     renderGame();
-  };
+  }
 
-  boardMount.append(boardCanvas);
+  function handlePrimaryPhaseAction(): void {
+    if (phase === 'paused') {
+      resumeGame();
+      return;
+    }
+
+    startGame();
+  }
+
+  function startGame(): void {
+    gameLoop.stop();
+    gameState = createFreshGameState(nextPieceProvider);
+    gameLoop.setState(gameState);
+    phase = 'playing';
+    renderGame();
+    gameLoop.start();
+  }
+
+  function togglePause(): void {
+    if (phase === 'playing') {
+      phase = 'paused';
+      gameLoop.stop();
+      renderGame();
+      return;
+    }
+
+    if (phase === 'paused') {
+      resumeGame();
+    }
+  }
+
+  function resumeGame(): void {
+    phase = 'playing';
+    renderGame();
+    gameLoop.start();
+  }
+
+  boardMount.append(boardCanvas, phaseOverlay.container);
 
   const sidePanel = document.createElement('aside');
   sidePanel.className =
@@ -167,26 +245,98 @@ function renderHud(hudElements: HudElements, state: ReturnType<typeof createGame
   hudElements.lines.textContent = NUMBER_FORMATTER.format(state.score.lines);
 }
 
+function createPhaseOverlay(onPrimaryAction: () => void): PhaseOverlayElements {
+  const container = document.createElement('section');
+  container.className =
+    'absolute inset-0 grid place-items-center bg-neutral-950/80 p-6 text-center backdrop-blur-sm';
+  container.setAttribute('aria-live', 'polite');
+
+  const panel = document.createElement('div');
+  panel.className = 'grid max-w-72 gap-4';
+
+  const title = document.createElement('h2');
+  title.className = 'text-3xl font-black tracking-normal text-white';
+
+  const body = document.createElement('p');
+  body.className = 'text-sm leading-6 text-stone-300';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className =
+    'min-h-12 rounded-lg bg-cyan-300 px-5 py-3 text-base font-black text-neutral-950 shadow-lg shadow-cyan-950/40 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-100 focus:ring-offset-2 focus:ring-offset-neutral-950 active:translate-y-px';
+  button.addEventListener('click', onPrimaryAction);
+
+  panel.append(title, body, button);
+  container.append(panel);
+
+  return { container, title, body, button };
+}
+
+function renderPhaseOverlay(elements: PhaseOverlayElements, phase: GamePhase): void {
+  elements.container.classList.toggle('hidden', phase === 'playing');
+
+  if (phase === 'ready') {
+    elements.title.textContent = 'Ready';
+    elements.body.textContent = 'Start a new run.';
+    elements.button.textContent = 'Start';
+    return;
+  }
+
+  if (phase === 'paused') {
+    elements.title.textContent = 'Paused';
+    elements.body.textContent = 'The current run is stopped.';
+    elements.button.textContent = 'Resume';
+    return;
+  }
+
+  if (phase === 'game-over') {
+    elements.title.textContent = 'Game over';
+    elements.body.textContent = 'Start again with a clear board.';
+    elements.button.textContent = 'Restart';
+  }
+}
+
+function createRandomPieceProvider(): NextPieceProvider {
+  return () => TETROMINO_IDS[Math.floor(Math.random() * TETROMINO_IDS.length)] ?? TETROMINO_IDS[0];
+}
+
+function createFreshGameState(nextPieceProvider: NextPieceProvider): GameState {
+  return createGameState(nextPieceProvider(), nextPieceProvider());
+}
+
 function applyKeyboardAction(
-  state: ReturnType<typeof createGameState>,
+  state: GameState,
   action: Exclude<KeyboardAction, 'pause-toggle'>,
-): ReturnType<typeof createGameState> {
+  nextPieceProvider: NextPieceProvider,
+): GameActionResult {
   switch (action) {
     case 'move-left':
-      return moveActivePieceLeft(state).state;
+      return { state: moveActivePieceLeft(state).state, gameOver: false };
     case 'move-right':
-      return moveActivePieceRight(state).state;
+      return { state: moveActivePieceRight(state).state, gameOver: false };
     case 'rotate-clockwise':
-      return rotateActivePiece(state).state;
+      return { state: rotateActivePiece(state).state, gameOver: false };
     case 'soft-drop': {
       const result = softDropActivePiece(state);
 
-      return result.landed && !result.moved ? advanceGravityTick(result.state).state : result.state;
+      if (result.landed && !result.moved) {
+        const tick = advanceGravityTick(result.state, nextPieceProvider());
+
+        return { state: tick.state, gameOver: tick.gameOver };
+      }
+
+      return { state: result.state, gameOver: false };
     }
     case 'hard-drop': {
       const result = hardDropActivePiece(state);
 
-      return result.landed ? advanceGravityTick(result.state).state : result.state;
+      if (result.landed) {
+        const tick = advanceGravityTick(result.state, nextPieceProvider());
+
+        return { state: tick.state, gameOver: tick.gameOver };
+      }
+
+      return { state: result.state, gameOver: false };
     }
   }
 }
